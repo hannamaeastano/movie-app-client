@@ -1,3 +1,4 @@
+// src/UserContext.js
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 
 const UserContext = createContext();
@@ -6,77 +7,49 @@ export const UserProvider = ({ children }) => {
     const [user, setUser] = useState({
         id: null,
         isAdmin: null,
-        token: null,
-        isLoading: true  // Added loading state
+        token: null
     });
 
-    const unsetUser = useCallback(() => {
-        localStorage.removeItem('token');
-        setUser({
-            id: null,
-            isAdmin: null,
-            token: null,
-            isLoading: false
-        });
-    }, []);
+    const unsetUser = () => {
+        localStorage.clear();
+        setUser({ id: null, isAdmin: null, token: null });
+    };
 
     const retrieveUserDetails = useCallback(async () => {
         const token = localStorage.getItem('token');
-        
-        if (!token) {
-            unsetUser();
-            return;
-        }
-
-        try {
-            const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/details`, {
-                headers: {
-                    Authorization: `Bearer ${token}`
+        if (token) {
+            try {
+                const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/details`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    setUser({
+                        id: data._id,
+                        isAdmin: data.isAdmin,
+                        token: token
+                    });
+                } else {
+                    console.error('Failed to retrieve user details:', data.message);
+                    unsetUser();
                 }
-            });
-
-            if (!response.ok) {
-                throw new Error(response.status === 401 ? 'Session expired' : 'Failed to fetch user details');
+            } catch (error) {
+                console.error('Error fetching user details:', error);
+                unsetUser();
             }
-
-            const data = await response.json();
-            setUser({
-                id: data._id,
-                isAdmin: data.isAdmin,
-                token: token,
-                isLoading: false
-            });
-        } catch (error) {
-            console.error('User details fetch error:', error.message);
-            if (error.message.includes('Failed to fetch')) {
-                console.error('Backend server might be down or unreachable');
-            }
+        } else {
             unsetUser();
         }
-    }, [unsetUser]);
+    }, []); // Empty dependency array because we only want to create this function once
 
     useEffect(() => {
         retrieveUserDetails();
-    }, [retrieveUserDetails]);
-
-    // Add function to manually set user after login
-    const setUserData = useCallback(({ id, isAdmin, token }) => {
-        localStorage.setItem('token', token);
-        setUser({
-            id,
-            isAdmin,
-            token,
-            isLoading: false
-        });
-    }, []);
+    }, [retrieveUserDetails]); // Now we include retrieveUserDetails in the dependencies
 
     return (
-        <UserContext.Provider value={{ 
-            user, 
-            setUser: setUserData, 
-            unsetUser, 
-            retrieveUserDetails 
-        }}>
+        <UserContext.Provider value={{ user, setUser, unsetUser, retrieveUserDetails }}>
             {children}
         </UserContext.Provider>
     );

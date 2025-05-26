@@ -1,7 +1,6 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Notyf } from 'notyf';
-import UserContext from '../UserContext';
+import { Notyf } from 'notyf'; 
 
 const notyf = new Notyf({
     duration: 3000,
@@ -13,54 +12,18 @@ const notyf = new Notyf({
 });
 
 const Register = () => {
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        confirmPassword: ''
-    });
-    const [errors, setErrors] = useState({});
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const { setUser } = useContext(UserContext);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const navigate = useNavigate();
-
-    const validateForm = () => {
-        const newErrors = {};
-        
-        if (!formData.email.includes('@')) {
-            newErrors.email = 'Invalid email format';
-        }
-        
-        if (formData.password.length < 6) {
-            newErrors.password = 'Password must be at least 6 characters';
-        }
-        
-        if (formData.password !== formData.confirmPassword) {
-            newErrors.confirmPassword = 'Passwords do not match';
-        }
-        
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
-    };
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
-        
-        // Clear error when user types
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!validateForm()) return;
-        
-        setIsSubmitting(true);
+
+        if (password !== confirmPassword) {
+            notyf.error('Passwords do not match.');
+            return;
+        }
 
         try {
             const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/register`, {
@@ -68,37 +31,18 @@ const Register = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password
-                }),
+                body: JSON.stringify({ email, password }),
             });
-
             const data = await response.json();
-
-            if (!response.ok) {
-                // Handle specific backend validation errors
-                if (response.status === 400 && data.errors) {
-                    setErrors(data.errors);
-                    throw new Error('Validation failed');
-                }
-                throw new Error(data.message || 'Registration failed');
-            }
-
-            // If registration includes automatic login
-            if (data.token) {
-                setUser({ token: data.token });
-                notyf.success('Registration successful! You are now logged in.');
-                navigate('/');
-            } else {
-                notyf.success('Registration successful! Please login.');
+            if (response.ok) {
+                notyf.success(data.message);
                 navigate('/login');
+            } else {
+                notyf.error(data.message || 'Registration failed. Please try again.');
             }
-        } catch (error) {
-            console.error('Registration error:', error);
-            notyf.error(error.message || 'Registration failed. Please try again.');
-        } finally {
-            setIsSubmitting(false);
+        } catch (err) {
+            console.error('Registration error:', err);
+            notyf.error('Network error or server unavailable. Please try again.');
         }
     };
 
@@ -106,69 +50,49 @@ const Register = () => {
         <div className="container mt-5">
             <div className="form-container col-md-6 offset-md-3">
                 <h2 className="form-heading text-center text-white mb-4">Register</h2>
-                <form onSubmit={handleSubmit} noValidate>
+                <form onSubmit={handleSubmit}>
                     <div className="mb-3">
                         <label htmlFor="email" className="form-label">Email:</label>
                         <input
                             type="email"
                             id="email"
-                            name="email"
-                            className={`form-control ${errors.email ? 'is-invalid' : ''}`}
-                            value={formData.email}
-                            onChange={handleChange}
+                            className="form-control"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             required
                         />
-                        {errors.email && <div className="invalid-feedback">{errors.email}</div>}
                     </div>
                     <div className="mb-3">
                         <label htmlFor="password" className="form-label">Password:</label>
                         <input
                             type="password"
                             id="password"
-                            name="password"
-                            className={`form-control ${errors.password ? 'is-invalid' : ''}`}
-                            value={formData.password}
-                            onChange={handleChange}
+                            className="form-control"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
                             required
-                            minLength="6"
                         />
-                        {errors.password && <div className="invalid-feedback">{errors.password}</div>}
                     </div>
                     <div className="mb-4">
                         <label htmlFor="confirmPassword" className="form-label">Confirm Password:</label>
                         <input
                             type="password"
                             id="confirmPassword"
-                            name="confirmPassword"
-                            className={`form-control ${errors.confirmPassword ? 'is-invalid' : ''}`}
-                            value={formData.confirmPassword}
-                            onChange={handleChange}
+                            className="form-control"
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
                             required
-                            minLength="6"
                         />
-                        {errors.confirmPassword && <div className="invalid-feedback">{errors.confirmPassword}</div>}
                     </div>
-                    <button 
-                        type="submit" 
-                        className="btn w-100" 
-                        style={{ backgroundColor: "#1b263b", color: "white" }}
-                        disabled={isSubmitting}
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                Registering...
-                            </>
-                        ) : 'Register'}
-                    </button>
+                    <button type="submit" className="btn w-100" style={{ backgroundColor: "#1b263b", color: "white" }}>Register</button>
                     <div className="text-center mt-3">
                         <p className="text-white mb-0">
                             Already have an account?{' '}
                             <a href="/login" className="text-decoration-none">
-                                Log in here
+                            Log in here
                             </a>
                         </p>
-                    </div>
+                </div>
                 </form>
             </div>
         </div>
