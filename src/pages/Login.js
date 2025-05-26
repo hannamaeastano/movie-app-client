@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UserContext from '../UserContext';
-import { Notyf } from 'notyf'; 
+import { Notyf } from 'notyf';
+
 const notyf = new Notyf({
     duration: 3000,
     position: {
@@ -12,13 +13,25 @@ const notyf = new Notyf({
 });
 
 const Login = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+    const [formData, setFormData] = useState({
+        email: '',
+        password: ''
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { setUser } = useContext(UserContext);
     const navigate = useNavigate();
-    const { retrieveUserDetails } = useContext(UserContext);
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsSubmitting(true);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/login`, {
@@ -26,20 +39,37 @@ const Login = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify(formData),
             });
+
             const data = await response.json();
-            if (response.ok) {
-                localStorage.setItem('token', data.access);
-                await retrieveUserDetails();
-                notyf.success('Login successful!');
-                navigate('/movies');
-            } else {
-                notyf.error(data.message || 'Login failed. Please check your credentials.');
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Login failed');
             }
-        } catch (err) {
-            console.error('Login error:', err);
-            notyf.error('Network error or server unavailable. Please try again.');
+
+            // Use the setUser function from context to handle token and user data
+            setUser({ 
+                token: data.access,
+                id: data.id,         // If backend returns user ID
+                isAdmin: data.isAdmin // If backend returns admin status
+            });
+
+            notyf.success('Login successful!');
+            navigate('/movies');
+        } catch (error) {
+            console.error('Login error:', error);
+            
+            // Handle specific error cases
+            if (error.message.includes('Failed to fetch')) {
+                notyf.error('Cannot connect to server. Please try again later.');
+            } else if (error.message.toLowerCase().includes('credentials')) {
+                notyf.error('Invalid email or password');
+            } else {
+                notyf.error(error.message || 'Login failed. Please try again.');
+            }
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -53,10 +83,12 @@ const Login = () => {
                         <input
                             type="email"
                             id="email"
+                            name="email"
                             className="form-control"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            value={formData.email}
+                            onChange={handleChange}
                             required
+                            autoComplete="username"
                         />
                     </div>
                     <div className="mb-4">
@@ -64,18 +96,27 @@ const Login = () => {
                         <input
                             type="password"
                             id="password"
+                            name="password"
                             className="form-control"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            value={formData.password}
+                            onChange={handleChange}
                             required
+                            autoComplete="current-password"
                         />
                     </div>
-                    <button type="submit" className="btn w-100" style={{ backgroundColor: "#1b263b", color: "white" }}>Login</button>
+                    <button 
+                        type="submit" 
+                        className="btn w-100" 
+                        style={{ backgroundColor: "#1b263b", color: "white" }}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? 'Logging in...' : 'Login'}
+                    </button>
                     <div className="text-center mt-4">
                         <p className="text-white mb-0">
                             Don't have an account?{' '}
                             <a href="/register" className="text-decoration-none">
-                            Register here
+                                Register here
                             </a>
                         </p>
                     </div>

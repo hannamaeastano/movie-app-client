@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Notyf } from 'notyf'; 
+import { Notyf } from 'notyf';
+import UserContext from '../UserContext';
 
 const notyf = new Notyf({
     duration: 3000,
@@ -12,18 +13,38 @@ const notyf = new Notyf({
 });
 
 const Register = () => {
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
+    const [formData, setFormData] = useState({
+        email: '',
+        password: '',
+        confirmPassword: ''
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const { setUser } = useContext(UserContext);
     const navigate = useNavigate();
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (password !== confirmPassword) {
+        // Client-side validation
+        if (formData.password !== formData.confirmPassword) {
             notyf.error('Passwords do not match.');
             return;
         }
+
+        if (formData.password.length < 6) {
+            notyf.error('Password must be at least 6 characters.');
+            return;
+        }
+
+        setIsSubmitting(true);
 
         try {
             const response = await fetch(`${process.env.REACT_APP_API_BASE_URL}/users/register`, {
@@ -31,18 +52,32 @@ const Register = () => {
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email, password }),
+                body: JSON.stringify({
+                    email: formData.email,
+                    password: formData.password
+                }),
             });
+
             const data = await response.json();
-            if (response.ok) {
-                notyf.success(data.message);
-                navigate('/login');
-            } else {
-                notyf.error(data.message || 'Registration failed. Please try again.');
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Registration failed');
             }
-        } catch (err) {
-            console.error('Registration error:', err);
-            notyf.error('Network error or server unavailable. Please try again.');
+
+            // If registration includes automatic login, handle token
+            if (data.token) {
+                setUser({ token: data.token }); // This will trigger user details retrieval
+                notyf.success('Registration successful! You are now logged in.');
+                navigate('/');
+            } else {
+                notyf.success(data.message || 'Registration successful! Please login.');
+                navigate('/login');
+            }
+        } catch (error) {
+            console.error('Registration error:', error);
+            notyf.error(error.message || 'Registration failed. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -56,9 +91,10 @@ const Register = () => {
                         <input
                             type="email"
                             id="email"
+                            name="email"
                             className="form-control"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
+                            value={formData.email}
+                            onChange={handleChange}
                             required
                         />
                     </div>
@@ -67,10 +103,12 @@ const Register = () => {
                         <input
                             type="password"
                             id="password"
+                            name="password"
                             className="form-control"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
+                            value={formData.password}
+                            onChange={handleChange}
                             required
+                            minLength="6"
                         />
                     </div>
                     <div className="mb-4">
@@ -78,21 +116,30 @@ const Register = () => {
                         <input
                             type="password"
                             id="confirmPassword"
+                            name="confirmPassword"
                             className="form-control"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            value={formData.confirmPassword}
+                            onChange={handleChange}
                             required
+                            minLength="6"
                         />
                     </div>
-                    <button type="submit" className="btn w-100" style={{ backgroundColor: "#1b263b", color: "white" }}>Register</button>
+                    <button 
+                        type="submit" 
+                        className="btn w-100" 
+                        style={{ backgroundColor: "#1b263b", color: "white" }}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? 'Registering...' : 'Register'}
+                    </button>
                     <div className="text-center mt-3">
                         <p className="text-white mb-0">
                             Already have an account?{' '}
                             <a href="/login" className="text-decoration-none">
-                            Log in here
+                                Log in here
                             </a>
                         </p>
-                </div>
+                    </div>
                 </form>
             </div>
         </div>
